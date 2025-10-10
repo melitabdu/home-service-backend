@@ -1,11 +1,10 @@
-import fs from "fs";
-import path from "path";
 import RentalBooking from "../models/RentalBooking.js";
 import Property from "../models/Property.js";
+import { cloudinary } from "../config/cloudinary.js";
 
-/** ─────────────────────────────────────────────────────────────────────────────
+/** ─────────────────────────────────────────────────────────────
  * Helpers & Constants
- * ────────────────────────────────────────────────────────────────────────────*/
+ */
 const BLOCKING_STATUSES = ["pending", "owner_confirm", "awaiting_payment", "processing", "completed"];
 const OWNER_DELETABLE_STATUSES = ["rejected", "completed"];
 
@@ -14,8 +13,6 @@ const normalizeDate = (d) => {
   if (Number.isNaN(x.getTime())) return null;
   return new Date(x.getFullYear(), x.getMonth(), x.getDate());
 };
-
-const rangesOverlap = (aStart, aEnd, bStart, bEnd) => (aStart < bEnd) && (aEnd > bStart);
 
 const canOwnerTransition = (current, next) => {
   if (next === "owner_confirm") return current === "pending";
@@ -26,7 +23,7 @@ const canOwnerTransition = (current, next) => {
 const canAdminTransition = (current, next, isPaid) => {
   switch (next) {
     case "awaiting_payment":
-      return current === "owner_confirm"; 
+      return current === "owner_confirm";
     case "processing":
       return current === "awaiting_payment" && isPaid;
     case "completed":
@@ -45,56 +42,52 @@ const emitSafe = (req, event, payload) => {
   } catch {}
 };
 
-/** ─────────────────────────────────────────────────────────────────────────────
+/** ─────────────────────────────────────────────────────────────
  * Create rental booking (User)
- * ────────────────────────────────────────────────────────────────────────────*/
+ */
 export const createRentalBooking = async (req, res) => {
   try {
-    const {
-      propertyId,
-      startDate,
-      endDate,
-      fullName,
-      phone,
-      email,
-      guests,
-      notes,
-    } = req.body;
+    const { propertyId, startDate, endDate, fullName, phone, email, guests, notes } = req.body;
 
-    const idFile = req.file?.path;
-    if (!idFile) return res.status(400).json({ message: "ID file is required" });
+    if (!req.file) return res.status(400).json({ message: "ID ፎቶ አስፈላጊ ነው" });
 
     const property = await Property.findById(propertyId);
-    if (!property) return res.status(404).json({ message: "Property not found" });
+    if (!property) return res.status(404).json({ message: "ንብረቱ አልተገኘም" });
 
     const start = normalizeDate(startDate);
     const end = normalizeDate(endDate);
-    if (!start || !end) return res.status(400).json({ message: "Invalid dates" });
-    if (!(start < end)) return res.status(400).json({ message: "startDate must be before endDate" });
+    if (!start || !end) return res.status(400).json({ message: "ትክክለኛ ቀናት ያስገቡ" });
+    if (!(start < end)) return res.status(400).json({ message: "መነሻ ቀን ከመጨረሻ ቀን ትክክል መሆን አለበት" });
 
+    // Check overlapping bookings
     const overlapping = await RentalBooking.findOne({
       propertyId,
       status: { $in: BLOCKING_STATUSES },
-      $expr: {
-        $and: [
-          { $lt: [start, "$endDate"] },
-          { $gt: [end, "$startDate"] },
-        ],
-      },
+      $expr: { $and: [{ $lt: [start, "$endDate"] }, { $gt: [end, "$startDate"] }] },
     }).lean();
 
-    if (overlapping) {
+    if (overlapping)
       return res.status(409).json({
-        message: "Selected dates are not available for this property.",
-        conflictWith: { id: overlapping._id, startDate: overlapping.startDate, endDate: overlapping.endDate, status: overlapping.status },
+        message: "የተመረጡት ቀናት ስለዚህ ንብረት የማይገኝ ነው",
+        conflictWith: {
+          id: overlapping._id,
+          startDate: overlapping.startDate,
+          endDate: overlapping.endDate,
+          status: overlapping.status,
+        },
       });
-    }
 
     const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-    if (totalDays <= 0) return res.status(400).json({ message: "Booking must be at least 1 night" });
+    if (totalDays <= 0) return res.status(400).json({ message: "ቦኪንግ ቢያንስ 1 ሌሊት መሆን አለበት" });
 
     const nightly = Number(property.price) || 0;
     const totalPrice = totalDays * nightly;
+
+    // Upload ID file
+    const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+      folder: "home-serv",
+      resource_type: "image",
+    });
 
     const booking = new RentalBooking({
       propertyId,
@@ -105,7 +98,11 @@ export const createRentalBooking = async (req, res) => {
       email,
       guests,
       notes,
-      idFile,
+      idFile: {
+        secure_url: uploadResult.secure_url,
+        public_id: uploadResult.public_id,
+        resource_type: "image",
+      },
       startDate: start,
       endDate: end,
       totalDays,
@@ -117,16 +114,16 @@ export const createRentalBooking = async (req, res) => {
     await booking.save();
     emitSafe(req, "newBooking", booking);
 
-    return res.status(201).json({ message: "Booking created successfully", booking });
+    return res.status(201).json({ message: "✅ ቦኪንግ ተፈጥሯል", booking });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Error creating booking", error: error.message });
+    res.status(500).json({ message: "❌ ቦኪንግ ላይ ስህተት ተከስቷል", error: error.message });
   }
 };
 
-/** ─────────────────────────────────────────────────────────────────────────────
- * User views their own bookings (reveal owner only if paid)
- * ────────────────────────────────────────────────────────────────────────────*/
+/** ─────────────────────────────────────────────────────────────
+ * User views their own bookings
+ */
 export const getMyRentalBookings = async (req, res) => {
   try {
     const bookings = await RentalBooking.find({ userId: req.user._id })
@@ -142,7 +139,7 @@ export const getMyRentalBookings = async (req, res) => {
         ...b,
         ownerContact: reveal
           ? { name: owner.name || "Owner", phone: owner.phone, email: owner.email }
-          : { name: "Hidden until payment", phone: "Hidden until payment", email: "Hidden until payment" },
+          : { name: "እስካሁን ክፍያ ሳይከፈል", phone: "እስካሁን ክፍያ ሳይከፈል", email: "እስካሁን ክፍያ ሳይከፈል" },
       };
     });
 
@@ -152,9 +149,9 @@ export const getMyRentalBookings = async (req, res) => {
   }
 };
 
-/** ─────────────────────────────────────────────────────────────────────────────
- * Owner views bookings (reveal renter only if paid)
- * ────────────────────────────────────────────────────────────────────────────*/
+/** ─────────────────────────────────────────────────────────────
+ * Owner views bookings
+ */
 export const getOwnerBookings = async (req, res) => {
   try {
     const bookings = await RentalBooking.find({ ownerId: req.user._id })
@@ -168,20 +165,8 @@ export const getOwnerBookings = async (req, res) => {
       return {
         ...b,
         renterContact: reveal
-          ? {
-              fullName: b.fullName,
-              phone: b.phone,
-              email: b.email,
-              address: b.address,
-              notes: b.notes || "",
-            }
-          : {
-              fullName: "Hidden until payment",
-              phone: "Hidden until payment",
-              email: "Hidden until payment",
-              address: "Hidden until payment",
-              notes: "Hidden until payment",
-            },
+          ? { fullName: b.fullName, phone: b.phone, email: b.email, notes: b.notes || "" }
+          : { fullName: "እስካሁን ክፍያ ሳይከፈል", phone: "እስካሁን ክፍያ ሳይከፈል", email: "እስካሁን ክፍያ ሳይከፈል", notes: "እስካሁን ክፍያ ሳይከፈል" },
       };
     });
 
@@ -191,6 +176,9 @@ export const getOwnerBookings = async (req, res) => {
   }
 };
 
+/** ─────────────────────────────────────────────────────────────
+ * Admin views all bookings
+ */
 export const getAllBookingsAdmin = async (req, res) => {
   try {
     const bookings = await RentalBooking.find({})
@@ -199,146 +187,153 @@ export const getAllBookingsAdmin = async (req, res) => {
       .populate("ownerId")
       .sort({ startDate: 1 })
       .lean();
-
     res.json(bookings);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-/** ─────────────────────────────────────────────────────────────────────────────
- * Update booking status (Owner)
- * ────────────────────────────────────────────────────────────────────────────*/
+/** ─────────────────────────────────────────────────────────────
+ * Owner updates status
+ */
 export const updateBookingStatusOwner = async (req, res) => {
   try {
     const { bookingId } = req.params;
     const { status, note } = req.body;
 
     const booking = await RentalBooking.findById(bookingId);
-    if (!booking) return res.status(404).json({ message: "Booking not found" });
+    if (!booking) return res.status(404).json({ message: "ቦኪንግ አልተገኘም" });
     if (!req.user || booking.ownerId.toString() !== req.user._id.toString())
-      return res.status(403).json({ message: "Not authorized" });
-
+      return res.status(403).json({ message: "የማይፈቀድዎ ነው" });
     if (!["owner_confirm", "rejected"].includes(status))
-      return res.status(400).json({ message: "Invalid status for owner" });
-
+      return res.status(400).json({ message: "ቦኪንግ ሁኔታ ለባለቤት የተፈቀደ አይደለም" });
     if (!canOwnerTransition(booking.status, status))
-      return res.status(409).json({ message: `Cannot change status ${booking.status} → ${status}` });
+      return res.status(409).json({ message: `ከ ${booking.status} ወደ ${status} ማስተካከያ አይቻልም` });
 
     booking.status = status;
     booking.history.push({ status, changedBy: req.user._id, note: note || "" });
     await booking.save();
 
     if (status === "owner_confirm") emitSafe(req, "booking-owner-confirmed", booking);
-
-    return res.json({ message: "Booking updated by owner", booking });
+    return res.json({ message: "ቦኪንግ በባለቤት ተሻሽሏል", booking });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-/** ─────────────────────────────────────────────────────────────────────────────
- * Update booking status (Admin)
- * ────────────────────────────────────────────────────────────────────────────*/
+/** ─────────────────────────────────────────────────────────────
+ * Admin updates status
+ */
 export const updateBookingStatusAdmin = async (req, res) => {
   try {
     const { bookingId } = req.params;
     const { status, note } = req.body;
 
     const booking = await RentalBooking.findById(bookingId);
-    if (!booking) return res.status(404).json({ message: "Booking not found" });
+    if (!booking) return res.status(404).json({ message: "ቦኪንግ አልተገኘም" });
 
     const isPaid = booking.paymentStatus === "paid";
     const ALLOWED = ["awaiting_payment", "processing", "completed", "cancelled"];
     if (!ALLOWED.includes(status))
-      return res.status(400).json({ message: "Invalid status for admin" });
-
+      return res.status(400).json({ message: "ቦኪንግ ሁኔታ ለአስተዳዳሪ የተፈቀደ አይደለም" });
     if (!canAdminTransition(booking.status, status, isPaid))
-      return res.status(409).json({ message: `Cannot change status ${booking.status} → ${status}` });
+      return res.status(409).json({ message: `ከ ${booking.status} ወደ ${status} ማስተካከያ አይቻልም` });
 
     booking.status = status;
-    booking.history.push({ status, changedBy: req.user?._id || (req.isAdminSecret ? "admin_secret" : null), note: note || "" });
+    booking.history.push({
+      status,
+      changedBy: req.user?._id || (req.isAdminSecret ? "admin_secret" : null),
+      note: note || "",
+    });
     await booking.save();
 
     if (status === "awaiting_payment") emitSafe(req, "booking-awaiting-payment", booking);
     else emitSafe(req, "bookingUpdated", booking);
 
-    return res.json({ message: "Booking updated by admin", booking });
+    return res.json({ message: "ቦኪንግ በአስተዳዳሪ ተሻሽሏል", booking });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-/** ─────────────────────────────────────────────────────────────────────────────
- * Mark booking as paid (Admin)
- * ────────────────────────────────────────────────────────────────────────────*/
+/** ─────────────────────────────────────────────────────────────
+ * Mark as paid
+ */
 export const markBookingAsPaid = async (req, res) => {
   try {
     const { bookingId } = req.params;
     const booking = await RentalBooking.findById(bookingId);
-    if (!booking) return res.status(404).json({ message: "Booking not found" });
+    if (!booking) return res.status(404).json({ message: "ቦኪንግ አልተገኘም" });
 
     booking.paymentStatus = "paid";
     if (booking.status === "awaiting_payment") booking.status = "processing";
-    booking.history.push({ status: booking.status, changedBy: req.user?._id || (req.isAdminSecret ? "admin_secret" : null), note: "Marked paid by admin" });
+    booking.history.push({
+      status: booking.status,
+      changedBy: req.user?._id || (req.isAdminSecret ? "admin_secret" : null),
+      note: "በአስተዳዳሪ የተከፈለበት ተደርጓል",
+    });
 
     await booking.save();
     emitSafe(req, "booking-paid", booking);
-
-    return res.json({ message: "Booking marked as paid", booking });
+    return res.json({ message: "ቦኪንግ ክፍያ ተከፍሏል", booking });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-/** ─────────────────────────────────────────────────────────────────────────────
- * Delete booking (Admin) – 🔥 no restrictions
- * ────────────────────────────────────────────────────────────────────────────*/
+/** ─────────────────────────────────────────────────────────────
+ * Delete booking (Admin)
+ */
 export const deleteBookingAdmin = async (req, res) => {
   try {
     const { bookingId } = req.params;
     const booking = await RentalBooking.findById(bookingId);
-    if (!booking) return res.status(404).json({ message: "Booking not found" });
+    if (!booking) return res.status(404).json({ message: "ቦኪንግ አልተገኘም" });
 
-    // 🗑️ Delete ID file if it exists
-    if (booking.idFile) {
-      const filePath = path.isAbsolute(booking.idFile)
-        ? booking.idFile
-        : path.join(process.cwd(), booking.idFile);
-
-      fs.unlink(filePath, (err) => {
-        if (err) console.error("⚠️ Failed to delete ID file:", err.message);
-      });
+    // Delete ID image
+    if (booking.idFile?.public_id) {
+      try {
+        await cloudinary.uploader.destroy(booking.idFile.public_id, { resource_type: "image" });
+      } catch (err) {
+        console.error("⚠️ የID ፎቶ ማጥፊያ አልተሳካም:", err.message);
+      }
     }
 
     await booking.deleteOne();
     emitSafe(req, "bookingDeleted", bookingId);
-
-    return res.json({ message: "✅ Booking deleted by admin", bookingId });
+    return res.json({ message: "ቦኪንግ በአስተዳዳሪ ተሰርዟል", bookingId });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-/** ─────────────────────────────────────────────────────────────────────────────
- * Delete booking (Owner) – still restricted
- * ────────────────────────────────────────────────────────────────────────────*/
+/** ─────────────────────────────────────────────────────────────
+ * Delete booking (Owner)
+ */
 export const deleteBookingOwner = async (req, res) => {
   try {
     const { bookingId } = req.params;
     const booking = await RentalBooking.findById(bookingId);
-    if (!booking) return res.status(404).json({ message: "Booking not found" });
+    if (!booking) return res.status(404).json({ message: "ቦኪንግ አልተገኘም" });
 
     if (!req.user || booking.ownerId.toString() !== req.user._id.toString())
-      return res.status(403).json({ message: "Not authorized" });
+      return res.status(403).json({ message: "የማይፈቀድዎ ነው" });
 
     if (!OWNER_DELETABLE_STATUSES.includes(booking.status))
-      return res.status(400).json({ message: "Can only delete completed or rejected bookings" });
+      return res.status(400).json({ message: "ብቻ የተዘረዘሩ ወይም የተሰረዙ ቦኪንግ መሰረዝ ይቻላል" });
+
+    // Delete ID image
+    if (booking.idFile?.public_id) {
+      try {
+        await cloudinary.uploader.destroy(booking.idFile.public_id, { resource_type: "image" });
+      } catch (err) {
+        console.error("⚠️ የID ፎቶ ማጥፊያ አልተሳካም:", err.message);
+      }
+    }
 
     await booking.deleteOne();
     emitSafe(req, "bookingDeleted", bookingId);
-
-    return res.json({ message: "Booking deleted by owner", bookingId });
+    return res.json({ message: "ቦኪንግ በባለቤት ተሰርዟል", bookingId });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

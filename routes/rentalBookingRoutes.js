@@ -1,6 +1,6 @@
 import express from "express";
 import { protect } from "../middleware/authMiddleware.js";
-import multer from "../middleware/uploadMiddleware.js";
+import { upload } from "../config/cloudinary.js"; // ✅ Use Cloudinary upload
 import {
   createRentalBooking,
   getMyRentalBookings,
@@ -12,8 +12,8 @@ import { protectOwner } from "../middleware/ownerAuthMiddleware.js";
 
 const router = express.Router();
 
-// User creates booking
-router.post("/", protect, multer.single("idCard"), createRentalBooking);
+// User creates booking with ID upload
+router.post("/", protect, upload.single("idCard"), createRentalBooking);
 
 // ✅ User views their own bookings
 router.get("/my-bookings", protect, getMyRentalBookings);
@@ -27,4 +27,4 @@ router.patch("/owner/:bookingId", protectOwner, updateBookingStatusOwner);
 // Owner deletes booking
 router.delete("/owner/:bookingId", protectOwner, deleteBookingOwner);
 
-export default router; // ✅ this was missing
+export default router;

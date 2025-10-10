@@ -3,8 +3,8 @@ import mongoose from "mongoose";
 const rentalBookingSchema = new mongoose.Schema(
   {
     propertyId: { type: mongoose.Schema.Types.ObjectId, ref: "Property", required: true },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "Owner", required: true }, // ⚠️ check if "Owner" model exists
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "Owner", required: true },
     fullName: { type: String, required: true },
     phone: { type: String, required: true },
     email: { type: String },
@@ -12,7 +12,14 @@ const rentalBookingSchema = new mongoose.Schema(
     notes: { type: String },
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
-    idFile: { type: String, required: true },
+
+    // ✅ Cloudinary file object (optional)
+    idFile: {
+      secure_url: { type: String, default: "" },
+      public_id: { type: String, default: "" },
+      format: { type: String, default: "" },
+    },
+
     status: {
       type: String,
       enum: ["pending", "owner_confirm", "rejected", "awaiting_payment", "processing", "completed", "cancelled"],
