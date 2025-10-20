@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import Owner from "../models/Owner.js";
 
+// Generate JWT token
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 };
@@ -23,11 +24,14 @@ export const loginOwner = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    // ✅ Return consistent response structure
     res.json({
-      _id: owner._id,
-      name: owner.name,
-      phone: owner.phone,
       token: generateToken(owner._id),
+      owner: {
+        _id: owner._id,
+        name: owner.name,
+        phone: owner.phone,
+      },
     });
   } catch (err) {
     res.status(500).json({ message: "Login error", error: err.message });

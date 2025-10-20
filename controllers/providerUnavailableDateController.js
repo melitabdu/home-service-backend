@@ -1,20 +1,15 @@
 import UnavailableDate from '../models/UnavailableDate.js';
 
-// ✅ Add unavailable date
+// ✅ Provider adds unavailable date
 export const addUnavailableDate = async (req, res) => {
   try {
-    const providerId = req.user._id; // comes from auth middleware
+    const providerId = req.user._id;
     const { date } = req.body;
 
-    if (!date) {
-      return res.status(400).json({ message: 'Date is required' });
-    }
+    if (!date) return res.status(400).json({ message: 'Date is required' });
 
-    // prevent duplicate dates
     const exists = await UnavailableDate.findOne({ provider: providerId, date });
-    if (exists) {
-      return res.status(400).json({ message: 'Date already marked unavailable' });
-    }
+    if (exists) return res.status(400).json({ message: 'Date already marked unavailable' });
 
     const newDate = new UnavailableDate({ provider: providerId, date });
     await newDate.save();
@@ -25,10 +20,23 @@ export const addUnavailableDate = async (req, res) => {
   }
 };
 
-// ✅ Get provider unavailable dates
+// ✅ Get unavailable dates for logged-in provider
 export const getUnavailableDates = async (req, res) => {
   try {
-    const providerId = req.user._id; // provider fetches their own
+    const providerId = req.user._id;
+    const dates = await UnavailableDate.find({ provider: providerId }).sort({ date: 1 });
+    res.json(dates);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ✅ Get unavailable dates for any provider (for customer)
+export const getUnavailableDatesByProvider = async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    if (!providerId) return res.status(400).json({ message: 'Provider ID is required' });
+
     const dates = await UnavailableDate.find({ provider: providerId }).sort({ date: 1 });
     res.json(dates);
   } catch (err) {
@@ -47,9 +55,7 @@ export const deleteUnavailableDate = async (req, res) => {
       provider: providerId,
     });
 
-    if (!deleted) {
-      return res.status(404).json({ message: 'Date not found' });
-    }
+    if (!deleted) return res.status(404).json({ message: 'Date not found' });
 
     res.json({ message: 'Unavailable date removed' });
   } catch (err) {
