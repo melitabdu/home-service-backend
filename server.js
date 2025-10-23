@@ -36,7 +36,7 @@ const allowedOrigins = [
   "http://localhost:5173", // User UI (local)
   "http://localhost:3000", // Provider UI (local)
   "http://localhost:5734", // Admin UI (local)
-  "https://home-service-user.onrender.com",     // Future deployed user UI
+  "https://frontend-user-ui.vercel.app",     // Future deployed user UI
   "https://home-service-provider.onrender.com", // Future deployed provider UI
   "https://home-service-admin.onrender.com",    // Future deployed admin UI
 ];
