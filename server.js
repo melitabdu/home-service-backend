@@ -31,36 +31,22 @@ const server = http.createServer(app);
 // ✅ Connect MongoDB
 connectDB();
 
-// ✅ Allowed origins for CORS
+// ✅ Define allowed origins (local + ready for deployment)
 const allowedOrigins = [
   "http://localhost:5173", // User UI (local)
   "http://localhost:3000", // Provider UI (local)
   "http://localhost:5734", // Admin UI (local)
-  "https://frontend-user-ui.vercel.app",     // Deployed user UI
-  "https://home-service-provider.onrender.com", // Deployed provider UI
-  "https://home-service-admin.onrender.com",    // Deployed admin UI
+  "https://frontend-user-ui.vercel.app",     // Future deployeduser UI
+  "https://home-service-provider.onrender.com", // Future deployed provider UI
+  "https://ethical-admin-ui-ew7v.vercel.app",    // Future deployed admin UI
 ];
-
-// ✅ Middleware
-app.use(express.json());
-
-// ✅ CORS configuration including preflight support
-const corsOptions = {
-  origin: allowedOrigins,
-  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-  credentials: true,
-};
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // handle preflight OPTIONS requests
-
-// ✅ Serve static uploads
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ✅ Socket.io setup
 export const io = new Server(server, {
-  cors: corsOptions,
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
 });
 app.set("io", io);
 
@@ -70,6 +56,20 @@ io.on("connection", (socket) => {
     console.log("❌ Client disconnected:", socket.id);
   });
 });
+
+// ✅ Middleware
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
+app.use(express.json());
+
+// ✅ Serve static uploads
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /**
  * 🔹 API Routes
