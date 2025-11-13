@@ -49,15 +49,19 @@ export const createRentalBooking = async (req, res) => {
   try {
     const { propertyId, startDate, endDate, fullName, phone, email, guests, notes } = req.body;
 
-    if (!req.file) return res.status(400).json({ message: "ID ፎቶ አስፈላጊ ነው" });
+    if (!req.file)
+      return res.status(400).json({ message: "ID ፎቶ አስፈላጊ ነው" });
 
     const property = await Property.findById(propertyId);
-    if (!property) return res.status(404).json({ message: "ንብረቱ አልተገኘም" });
+    if (!property)
+      return res.status(404).json({ message: "ንብረቱ አልተገኘም" });
 
     const start = normalizeDate(startDate);
     const end = normalizeDate(endDate);
-    if (!start || !end) return res.status(400).json({ message: "ትክክለኛ ቀናት ያስገቡ" });
-    if (!(start < end)) return res.status(400).json({ message: "መነሻ ቀን ከመጨረሻ ቀን ትክክል መሆን አለበት" });
+    if (!start || !end)
+      return res.status(400).json({ message: "ትክክለኛ ቀናት ያስገቡ" });
+    if (!(start < end))
+      return res.status(400).json({ message: "መነሻ ቀን ከመጨረሻ ቀን ትክክል መሆን አለበት" });
 
     // Check overlapping bookings
     const overlapping = await RentalBooking.findOne({
@@ -78,7 +82,8 @@ export const createRentalBooking = async (req, res) => {
       });
 
     const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-    if (totalDays <= 0) return res.status(400).json({ message: "ቦኪንግ ቢያንስ 1 ሌሊት መሆን አለበት" });
+    if (totalDays <= 0)
+      return res.status(400).json({ message: "ቦኪንግ ቢያንስ 1 ሌሊት መሆን አለበት" });
 
     const nightly = Number(property.price) || 0;
     const totalPrice = totalDays * nightly;
@@ -267,6 +272,7 @@ export const markBookingAsPaid = async (req, res) => {
 
     booking.paymentStatus = "paid";
     if (booking.status === "awaiting_payment") booking.status = "processing";
+
     booking.history.push({
       status: booking.status,
       changedBy: req.user?._id || (req.isAdminSecret ? "admin_secret" : null),
@@ -290,7 +296,6 @@ export const deleteBookingAdmin = async (req, res) => {
     const booking = await RentalBooking.findById(bookingId);
     if (!booking) return res.status(404).json({ message: "ቦኪንግ አልተገኘም" });
 
-    // Delete ID image
     if (booking.idFile?.public_id) {
       try {
         await cloudinary.uploader.destroy(booking.idFile.public_id, { resource_type: "image" });
@@ -322,7 +327,6 @@ export const deleteBookingOwner = async (req, res) => {
     if (!OWNER_DELETABLE_STATUSES.includes(booking.status))
       return res.status(400).json({ message: "ብቻ የተዘረዘሩ ወይም የተሰረዙ ቦኪንግ መሰረዝ ይቻላል" });
 
-    // Delete ID image
     if (booking.idFile?.public_id) {
       try {
         await cloudinary.uploader.destroy(booking.idFile.public_id, { resource_type: "image" });
