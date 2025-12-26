@@ -1,33 +1,43 @@
-import express from "express";
+import express from 'express';
 import {
-  createProperty,
-  getProperties,
-  getPropertyById,
-  updateProperty,
-  deleteProperty,
-  getPropertiesByCategory,
-  searchProperties,
-  uploadPropertyImage,
-  deletePropertyImage,
-} from "../controllers/propertyController.js";
-
-import upload from "../middleware/uploadMiddleware.js";
+  addProvider,
+  getAllProviders,
+  getProvidersByCategory,
+  getProviderBySlug,
+  updateProvider,
+  deleteProvider,
+} from '../controllers/providerController.js';
 
 const router = express.Router();
 
-/** CRUD */
-router.post("/", upload.array("images", 5), createProperty);
-router.get("/", getProperties);
-router.get("/:id", getPropertyById);
-router.put("/:id", upload.array("images", 5), updateProperty);
-router.delete("/:id", deleteProperty);
+/////////////////////////////////////////////////
+// 📄 Get all providers (optional ?category=)
+/////////////////////////////////////////////////
+router.get('/', getAllProviders);
 
-/** Filter & Search */
-router.get("/category/:category", getPropertiesByCategory);
-router.get("/search/query", searchProperties);
+/////////////////////////////////////////////////
+// 📂 Get providers by category
+/////////////////////////////////////////////////
+router.get('/category/:category', getProvidersByCategory);
 
-/** Images */
-router.post("/:id/image", upload.single("image"), uploadPropertyImage);
-router.delete("/:id/image", deletePropertyImage);
+/////////////////////////////////////////////////
+// 🔗 Get provider by slug (PUBLIC LINK)
+/////////////////////////////////////////////////
+router.get('/slug/:slug', getProviderBySlug);
+
+/////////////////////////////////////////////////
+// ➕ Add provider (ADMIN)
+/////////////////////////////////////////////////
+router.post('/', addProvider);
+
+/////////////////////////////////////////////////
+// ✏️ Update provider
+/////////////////////////////////////////////////
+router.put('/:id', updateProvider);
+
+/////////////////////////////////////////////////
+// 🗑️ Delete provider
+/////////////////////////////////////////////////
+router.delete('/:id', deleteProvider);
 
 export default router;

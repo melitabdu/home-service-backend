@@ -24,6 +24,9 @@ import ownerAuthRoutes from "./routes/ownerAuthRoutes.js";
 import rentalBookingRoutes from "./routes/rentalBookingRoutes.js";
 import adminRentalBookingRoutes from "./routes/adminRentalBookingRoutes.js";
 
+
+
+
 // Load env
 dotenv.config();
 
@@ -86,6 +89,8 @@ app.use("/api/users", userRoutes);
 app.use("/api/providers/auth", providerAuthRoutes);
 app.use("/api/providers", providerRoutes);
 app.use("/api/providers/unavailable-dates", providerUnavailableDateRoutes);
+
+
 
 // Admin
 app.use("/api/admin", adminRoutes);

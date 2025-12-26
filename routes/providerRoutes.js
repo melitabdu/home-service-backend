@@ -1,32 +1,43 @@
-// backend/routes/providerRoutes.js
 import express from 'express';
-import Provider from '../models/Provider.js';
+import {
+  addProvider,
+  getAllProviders,
+  getProvidersByCategory,
+  getProviderBySlug,
+  updateProvider,
+  deleteProvider,
+} from '../controllers/providerController.js';
 
 const router = express.Router();
 
-// Get all providers (optionally filtered via query param)
+/////////////////////////////////////////////////
+// 📄 Get all providers (optional ?category=)
+/////////////////////////////////////////////////
+router.get('/', getAllProviders);
 
+/////////////////////////////////////////////////
+// 📂 Get providers by category
+/////////////////////////////////////////////////
+router.get('/category/:category', getProvidersByCategory);
 
-router.get('/', async (req, res) => {
-  try {
-    const { category } = req.query;
-    const filter = category ? { serviceCategory: category } : {};
-    const providers = await Provider.find(filter);
-    res.status(200).json(providers);
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch providers' });
-  }
-});
+/////////////////////////////////////////////////
+// 🔗 Get provider by slug (PUBLIC LINK)
+/////////////////////////////////////////////////
+router.get('/slug/:slug', getProviderBySlug);
 
-// ✅ NEW: Get providers by category via route param
-router.get('/category/:category', async (req, res) => {
-  try {
-    const category = req.params.category;
-    const providers = await Provider.find({ serviceCategory: category });
-    res.status(200).json(providers);
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch providers by category' });
-  }
-});
+/////////////////////////////////////////////////
+// ➕ Add provider (ADMIN)
+/////////////////////////////////////////////////
+router.post('/', addProvider);
+
+/////////////////////////////////////////////////
+// ✏️ Update provider
+/////////////////////////////////////////////////
+router.put('/:id', updateProvider);
+
+/////////////////////////////////////////////////
+// 🗑️ Delete provider
+/////////////////////////////////////////////////
+router.delete('/:id', deleteProvider);
 
 export default router;

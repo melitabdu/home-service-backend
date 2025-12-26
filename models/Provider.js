@@ -1,33 +1,74 @@
-// backend/models/Provider.js
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-const providerSchema = new mongoose.Schema({
-  photo: { type: String },     // ✅ Cloudinary URL
-  photoId: { type: String },   // ✅ Cloudinary public_id (for deletion)
+const providerSchema = new mongoose.Schema(
+  {
+    // 🖼️ Provider image (Cloudinary)
+    photo: { type: String },     // Cloudinary URL
+    photoId: { type: String },   // Cloudinary public_id
 
-  name: { type: String, required: true },
-  serviceCategory: { type: String, required: true },
-  phone: { type: String, required: true, unique: true },
-  description: { type: String },
-  priceEstimate: { type: Number },
-  password: { type: String, required: true },
+    // 🧑 Provider info
+    name: { type: String, required: true },
+    serviceCategory: { type: String, required: true },
+    phone: { type: String, required: true, unique: true },
+    description: { type: String },
+    priceEstimate: { type: Number },
 
-  // 🆕 List of unavailable dates in YYYY-MM-DD format
-  unavailableDates: { type: [String], default: [] },
-}, { timestamps: true });
+    // 🔐 Auth
+    password: { type: String, required: true },
 
-// 🔐 Encrypt password before saving
+    // 🔗 Public shareable link slug
+    slug: { type: String, unique: true },
+
+    // 📅 Availability
+    unavailableDates: {
+      type: [String], // YYYY-MM-DD
+      default: [],
+    },
+  },
+  { timestamps: true }
+);
+
+/////////////////////////////////////////////////
+// 🔗 AUTO-GENERATE UNIQUE SLUG (SAFE)
+/////////////////////////////////////////////////
+providerSchema.pre('save', async function (next) {
+  if (this.slug || !this.name) return next();
+
+  const baseSlug = this.name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+
+  let slug = baseSlug;
+  let count = 1;
+
+  while (await mongoose.models.Provider.findOne({ slug })) {
+    slug = `${baseSlug}-${count}`;
+    count++;
+  }
+
+  this.slug = slug;
+  next();
+});
+
+/////////////////////////////////////////////////
+// 🔐 HASH PASSWORD BEFORE SAVE
+/////////////////////////////////////////////////
 providerSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
+
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
 
-// 🔐 Compare entered password with hashed password
+/////////////////////////////////////////////////
+// 🔐 PASSWORD COMPARISON
+/////////////////////////////////////////////////
 providerSchema.methods.matchPassword = async function (enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+  return bcrypt.compare(enteredPassword, this.password);
 };
 
 const Provider = mongoose.model('Provider', providerSchema);
