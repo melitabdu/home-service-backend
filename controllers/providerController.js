@@ -1,65 +1,89 @@
 import Provider from '../models/Provider.js';
-import fs from 'fs';
-import path from 'path';
+import bcrypt from 'bcryptjs';
 
 /////////////////////////////////////////////////
-// ➕ Add a new provider (ADMIN ONLY)
+// ➕ ADD PROVIDER (ADMIN)
 /////////////////////////////////////////////////
 export const addProvider = async (req, res) => {
-  const { name, phone, serviceCategory, description, priceEstimate, password } = req.body;
-  const photo = req.file ? req.file.filename : null;
-
-  if ([name, phone, serviceCategory, description, priceEstimate, password].some(f => !f)) {
-    return res.status(400).json({ message: 'All fields are required' });
-  }
-
   try {
-    const providerExists = await Provider.findOne({ phone });
-    if (providerExists) {
-      return res.status(400).json({ message: 'Provider with this phone number already exists' });
-    }
-
-    // Create provider
-    await Provider.create({
+    const {
       name,
       phone,
       serviceCategory,
       description,
       priceEstimate,
-      photo,
       password,
+    } = req.body;
+
+    if (
+      !name ||
+      !phone ||
+      !serviceCategory ||
+      !description ||
+      !priceEstimate ||
+      !password
+    ) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    const exists = await Provider.findOne({ phone });
+    if (exists) {
+      return res.status(400).json({ message: 'Provider already exists' });
+    }
+
+    const photo = req.file ? req.file.path : null;
+
+    const provider = await Provider.create({
+      name,
+      phone,
+      serviceCategory,
+      description,
+      priceEstimate,
+      password,
+      photo,
     });
 
-    // Fetch the saved provider including the slug
-    const savedProvider = await Provider.findOne({ phone }).select(
-      '_id name serviceCategory description priceEstimate phone password slug photo'
-    );
-
-    res.status(201).json(savedProvider);
+    // ✅ Return CLEAN response (NO PASSWORD)
+    res.status(201).json({
+      _id: provider._id,
+      name: provider.name,
+      phone: provider.phone,
+      serviceCategory: provider.serviceCategory,
+      description: provider.description,
+      priceEstimate: provider.priceEstimate,
+      slug: provider.slug,
+      photo: provider.photo,
+      createdAt: provider.createdAt,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Add provider error:', error);
+    res.status(500).json({ message: 'Failed to add provider' });
   }
 };
 
 /////////////////////////////////////////////////
-// 📄 Get ALL providers
+// 📄 GET ALL PROVIDERS (ADMIN)
 /////////////////////////////////////////////////
 export const getAllProviders = async (req, res) => {
   try {
-    const providers = await Provider.find({});
-    res.json(providers);
+    const providers = await Provider.find().select('-password');
+    res.status(200).json(providers);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Failed to fetch providers' });
   }
 };
 
 /////////////////////////////////////////////////
-// 📂 Get providers by CATEGORY
+// 📂 GET PROVIDERS BY CATEGORY (PUBLIC)
 /////////////////////////////////////////////////
 export const getProvidersByCategory = async (req, res) => {
   try {
-    const category = req.params.category;
-    const providers = await Provider.find({ serviceCategory: category });
+    const { category } = req.params;
+
+    const providers = await Provider.find({
+      serviceCategory: category,
+    }).select('-password');
+
     res.status(200).json(providers);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch providers by category' });
@@ -67,44 +91,60 @@ export const getProvidersByCategory = async (req, res) => {
 };
 
 /////////////////////////////////////////////////
-// 🔗 Get provider by SLUG (PUBLIC)
+// 🔗 GET PROVIDER BY SLUG (PUBLIC SHARE LINK)
 /////////////////////////////////////////////////
 export const getProviderBySlug = async (req, res) => {
   try {
-    const provider = await Provider.findOne({ slug: req.params.slug });
+    const { slug } = req.params;
+
+    const provider = await Provider.findOne({ slug }).select('-password');
 
     if (!provider) {
       return res.status(404).json({ message: 'Provider not found' });
     }
 
-    res.json(provider);
+    res.status(200).json(provider);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Slug fetch error:', error);
+    res.status(500).json({ message: 'Failed to fetch provider' });
   }
 };
 
 /////////////////////////////////////////////////
-// ✏️ Update provider by ID (ADMIN)
+// ✏️ UPDATE PROVIDER (ADMIN)
 /////////////////////////////////////////////////
 export const updateProvider = async (req, res) => {
   try {
     const updates = { ...req.body };
-    if (req.file) updates.photo = req.file.filename;
 
-    const provider = await Provider.findByIdAndUpdate(req.params.id, updates, { new: true });
+    // 🔐 Re-hash password if updated
+    if (updates.password) {
+      const salt = await bcrypt.genSalt(10);
+      updates.password = await bcrypt.hash(updates.password, salt);
+    }
+
+    if (req.file) {
+      updates.photo = req.file.path;
+    }
+
+    const provider = await Provider.findByIdAndUpdate(
+      req.params.id,
+      updates,
+      { new: true }
+    ).select('-password');
 
     if (!provider) {
       return res.status(404).json({ message: 'Provider not found' });
     }
 
-    res.json(provider);
+    res.status(200).json(provider);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Failed to update provider' });
   }
 };
 
 /////////////////////////////////////////////////
-// 🗑️ Delete provider by ID
+// 🗑 DELETE PROVIDER (ADMIN)
 /////////////////////////////////////////////////
 export const deleteProvider = async (req, res) => {
   try {
@@ -114,14 +154,9 @@ export const deleteProvider = async (req, res) => {
       return res.status(404).json({ message: 'Provider not found' });
     }
 
-    if (provider.photo) {
-      const photoPath = path.join(process.cwd(), 'uploads', provider.photo);
-      if (fs.existsSync(photoPath)) fs.unlinkSync(photoPath);
-    }
-
     await provider.deleteOne();
-    res.json({ message: '✅ Provider and photo deleted successfully' });
+    res.status(200).json({ message: 'Provider deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Failed to delete provider' });
   }
 };

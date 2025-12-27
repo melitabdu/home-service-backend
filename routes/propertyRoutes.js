@@ -1,43 +1,33 @@
-import express from 'express';
+import express from "express";
 import {
-  addProvider,
-  getAllProviders,
-  getProvidersByCategory,
-  getProviderBySlug,
-  updateProvider,
-  deleteProvider,
-} from '../controllers/providerController.js';
+  createProperty,
+  getProperties,
+  getPropertyById,
+  updateProperty,
+  deleteProperty,
+  getPropertiesByCategory,
+  searchProperties,
+  uploadPropertyImage,
+  deletePropertyImage,
+} from "../controllers/propertyController.js";
+
+import upload from "../middleware/uploadMiddleware.js";
 
 const router = express.Router();
 
-/////////////////////////////////////////////////
-// 📄 Get all providers (optional ?category=)
-/////////////////////////////////////////////////
-router.get('/', getAllProviders);
+/** CRUD */
+router.post("/", upload.array("images", 5), createProperty);
+router.get("/", getProperties);
+router.get("/:id", getPropertyById);
+router.put("/:id", upload.array("images", 5), updateProperty);
+router.delete("/:id", deleteProperty);
 
-/////////////////////////////////////////////////
-// 📂 Get providers by category
-/////////////////////////////////////////////////
-router.get('/category/:category', getProvidersByCategory);
+/** Filter & Search */
+router.get("/category/:category", getPropertiesByCategory);
+router.get("/search/query", searchProperties);
 
-/////////////////////////////////////////////////
-// 🔗 Get provider by slug (PUBLIC LINK)
-/////////////////////////////////////////////////
-router.get('/slug/:slug', getProviderBySlug);
-
-/////////////////////////////////////////////////
-// ➕ Add provider (ADMIN)
-/////////////////////////////////////////////////
-router.post('/', addProvider);
-
-/////////////////////////////////////////////////
-// ✏️ Update provider
-/////////////////////////////////////////////////
-router.put('/:id', updateProvider);
-
-/////////////////////////////////////////////////
-// 🗑️ Delete provider
-/////////////////////////////////////////////////
-router.delete('/:id', deleteProvider);
+/** Images */
+router.post("/:id/image", upload.single("image"), uploadPropertyImage);
+router.delete("/:id/image", deletePropertyImage);
 
 export default router;

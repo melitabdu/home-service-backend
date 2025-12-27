@@ -1,4 +1,5 @@
 import express from 'express';
+import upload from '../middleware/uploadMiddleware.js';
 import {
   addProvider,
   getAllProviders,
@@ -11,33 +12,22 @@ import {
 const router = express.Router();
 
 /////////////////////////////////////////////////
-// 📄 Get all providers (optional ?category=)
+// 🌍 PUBLIC ROUTES
 /////////////////////////////////////////////////
-router.get('/', getAllProviders);
 
-/////////////////////////////////////////////////
-// 📂 Get providers by category
-/////////////////////////////////////////////////
+// Shareable public link
+router.get('/p/:slug', getProviderBySlug);
+
+// Providers by category
 router.get('/category/:category', getProvidersByCategory);
 
 /////////////////////////////////////////////////
-// 🔗 Get provider by slug (PUBLIC LINK)
+// 🔐 ADMIN ROUTES
 /////////////////////////////////////////////////
-router.get('/slug/:slug', getProviderBySlug);
 
-/////////////////////////////////////////////////
-// ➕ Add provider (ADMIN)
-/////////////////////////////////////////////////
-router.post('/', addProvider);
-
-/////////////////////////////////////////////////
-// ✏️ Update provider
-/////////////////////////////////////////////////
-router.put('/:id', updateProvider);
-
-/////////////////////////////////////////////////
-// 🗑️ Delete provider
-/////////////////////////////////////////////////
+router.get('/', getAllProviders);
+router.post('/', upload.single('photo'), addProvider);
+router.put('/:id', upload.single('photo'), updateProvider);
 router.delete('/:id', deleteProvider);
 
 export default router;
