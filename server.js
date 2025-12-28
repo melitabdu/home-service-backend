@@ -8,6 +8,9 @@ import { fileURLToPath } from "url";
 
 import connectDB from "./config/db.js";
 
+// Controllers (PUBLIC SLUG)
+import { getProviderBySlug } from "./controllers/providerController.js";
+
 // Routes
 import userRoutes from "./routes/userRoutes.js";
 import authRoutes from "./routes/AuthRoutes.js";
@@ -24,9 +27,6 @@ import ownerAuthRoutes from "./routes/ownerAuthRoutes.js";
 import rentalBookingRoutes from "./routes/rentalBookingRoutes.js";
 import adminRentalBookingRoutes from "./routes/adminRentalBookingRoutes.js";
 
-
-
-
 // Load env
 dotenv.config();
 
@@ -36,37 +36,19 @@ const server = http.createServer(app);
 // Connect MongoDB
 connectDB();
 
-// Allowed origins (local + deploy-ready)
+/* ======================================================
+   🌍 CORS
+====================================================== */
 const allowedOrigins = [
   "http://localhost:5173", // user UI
   "http://localhost:3000", // provider UI
   "http://localhost:5734", // admin UI
 
-  "https://frontend-user-ui.vercel.app",           // deployed user UI
-  "https://ethical-admin-ui-c1p1.vercel.app",      // deployed provider UI
-  "https://ethical-admin-ui-yvu3.vercel.app",      // deployed admin UI
-].filter(Boolean); // remove undefined / invalid entries
+  "https://frontend-user-ui.vercel.app",
+  "https://ethical-admin-ui-c1p1.vercel.app",
+  "https://ethical-admin-ui-yvu3.vercel.app",
+].filter(Boolean);
 
-// Socket.io with fallback
-export const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    credentials: true,
-  },
-  transports: ["websocket", "polling"], // better cross-network support
-});
-
-app.set("io", io);
-
-io.on("connection", (socket) => {
-  console.log(`⚡ Client connected: ${socket.id}`);
-
-  socket.on("disconnect", () => {
-    console.log(`❌ Client disconnected: ${socket.id}`);
-  });
-});
-
-// Middleware
 app.use(
   cors({
     origin: allowedOrigins,
@@ -74,6 +56,29 @@ app.use(
   })
 );
 
+/* ======================================================
+   🔌 SOCKET.IO
+====================================================== */
+export const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
+  transports: ["websocket", "polling"],
+});
+
+app.set("io", io);
+
+io.on("connection", (socket) => {
+  console.log(`⚡ Client connected: ${socket.id}`);
+  socket.on("disconnect", () => {
+    console.log(`❌ Client disconnected: ${socket.id}`);
+  });
+});
+
+/* ======================================================
+   🧩 MIDDLEWARE
+====================================================== */
 app.use(express.json());
 
 // Static uploads
@@ -81,7 +86,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// API Routes
+/* ======================================================
+   🌍 TOP-LEVEL PUBLIC PROVIDER LINK (IMPORTANT)
+====================================================== */
+// ✅ THIS IS THE KEY FIX
+app.get("/p/:slug", getProviderBySlug);
+
+/* ======================================================
+   🔐 API ROUTES
+====================================================== */
+
+// Auth & users
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 
@@ -89,8 +104,6 @@ app.use("/api/users", userRoutes);
 app.use("/api/providers/auth", providerAuthRoutes);
 app.use("/api/providers", providerRoutes);
 app.use("/api/providers/unavailable-dates", providerUnavailableDateRoutes);
-
-
 
 // Admin
 app.use("/api/admin", adminRoutes);
@@ -109,14 +122,22 @@ app.use("/api/rental-bookings", rentalBookingRoutes);
 app.use("/api/advideos", adVideoRoutes);
 app.use("/api/properties", propertyRoutes);
 
-// Error handler
+/* ======================================================
+   ❌ ERROR HANDLER
+====================================================== */
 app.use((err, req, res, next) => {
   console.error("🔥 Server Error:", err.stack);
-  res.status(500).json({ message: "Server Error", error: err.message });
+  res.status(500).json({
+    message: "Server Error",
+    error: err.message,
+  });
 });
 
-// Start server
+/* ======================================================
+   🚀 START SERVER
+====================================================== */
 const PORT = process.env.PORT || 5000;
+
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
