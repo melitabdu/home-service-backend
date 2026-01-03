@@ -26,6 +26,10 @@ import ownerRoutes from "./routes/ownerRoutes.js";
 import ownerAuthRoutes from "./routes/ownerAuthRoutes.js";
 import rentalBookingRoutes from "./routes/rentalBookingRoutes.js";
 import adminRentalBookingRoutes from "./routes/adminRentalBookingRoutes.js";
+import adminUserRoutes from "./routes/adminUserRoutes.js";
+
+
+
 
 // Load env
 dotenv.config();
@@ -100,6 +104,7 @@ app.get("/p/:slug", getProviderBySlug);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 
+
 // Providers
 app.use("/api/providers/auth", providerAuthRoutes);
 app.use("/api/providers", providerRoutes);
@@ -107,6 +112,7 @@ app.use("/api/providers/unavailable-dates", providerUnavailableDateRoutes);
 
 // Admin
 app.use("/api/admin", adminRoutes);
+app.use("/api/admin", adminUserRoutes);
 app.use("/api/admin/unavailable-dates", adminUnavailableDateRoutes);
 app.use("/api/admin/rental-bookings", adminRentalBookingRoutes);
 
