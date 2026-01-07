@@ -3,7 +3,7 @@ import { getProviderBySlug } from '../controllers/providerPublicController.js';
 
 const router = express.Router();
 
-// 🔗 PUBLIC PROVIDER LINK
+// 🔗 Public provider page
 router.get('/p/:slug', getProviderBySlug);
 
 export default router;
