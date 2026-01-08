@@ -8,6 +8,9 @@ import { fileURLToPath } from "url";
 
 import connectDB from "./config/db.js";
 
+// Controllers (PUBLIC SLUG)
+import { getProviderBySlug } from "./controllers/providerController.js";
+
 // Routes
 import userRoutes from "./routes/userRoutes.js";
 import authRoutes from "./routes/AuthRoutes.js";
@@ -25,8 +28,8 @@ import rentalBookingRoutes from "./routes/rentalBookingRoutes.js";
 import adminRentalBookingRoutes from "./routes/adminRentalBookingRoutes.js";
 import adminUserRoutes from "./routes/adminUserRoutes.js";
 
-// ✅ PUBLIC PROVIDER SLUG ROUTE
-import providerPublicRoutes from "./routes/providerPublicRoutes.js";
+
+
 
 // Load env
 dotenv.config();
@@ -34,16 +37,17 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// Connect DB
+// Connect MongoDB
 connectDB();
 
-/* =========================
+/* ======================================================
    🌍 CORS
-========================= */
+====================================================== */
 const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "http://localhost:5734",
+  "http://localhost:5173", // user UI
+  "http://localhost:3000", // provider UI
+  "http://localhost:5734", // admin UI
+
   "https://frontend-user-ui.vercel.app",
   "https://ethical-admin-ui-c1p1.vercel.app",
   "https://ethical-admin-ui-yvu3.vercel.app",
@@ -56,9 +60,9 @@ app.use(
   })
 );
 
-/* =========================
+/* ======================================================
    🔌 SOCKET.IO
-========================= */
+====================================================== */
 export const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
@@ -76,9 +80,9 @@ io.on("connection", (socket) => {
   });
 });
 
-/* =========================
+/* ======================================================
    🧩 MIDDLEWARE
-========================= */
+====================================================== */
 app.use(express.json());
 
 // Static uploads
@@ -86,18 +90,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-/* =========================
+/* ======================================================
+   🌍 TOP-LEVEL PUBLIC PROVIDER LINK (IMPORTANT)
+====================================================== */
+// ✅ THIS IS THE KEY FIX
+app.get("/p/:slug", getProviderBySlug);
+
+/* ======================================================
    🔐 API ROUTES
-========================= */
+====================================================== */
 
 // Auth & users
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 
+
 // Providers
 app.use("/api/providers/auth", providerAuthRoutes);
 app.use("/api/providers", providerRoutes);
-app.use("/api/providers", providerPublicRoutes); // ✅ PUBLIC SLUG API
 app.use("/api/providers/unavailable-dates", providerUnavailableDateRoutes);
 
 // Admin
@@ -114,13 +124,13 @@ app.use("/api/owners/auth", ownerAuthRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/rental-bookings", rentalBookingRoutes);
 
-// Ads & properties
+// Ads + Properties
 app.use("/api/advideos", adVideoRoutes);
 app.use("/api/properties", propertyRoutes);
 
-/* =========================
+/* ======================================================
    ❌ ERROR HANDLER
-========================= */
+====================================================== */
 app.use((err, req, res, next) => {
   console.error("🔥 Server Error:", err.stack);
   res.status(500).json({
@@ -129,9 +139,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-/* =========================
+/* ======================================================
    🚀 START SERVER
-========================= */
+====================================================== */
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
